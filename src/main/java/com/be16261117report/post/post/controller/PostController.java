@@ -1,11 +1,11 @@
 package com.be16261117report.post.post.controller;
 
+import com.be16261117report.global.rsData.RsData;
 import com.be16261117report.post.post.dto.PostDto;
 import com.be16261117report.post.post.dto.PostWriteReqBody;
 import com.be16261117report.post.post.entity.Post;
 import com.be16261117report.post.post.service.PostService;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -40,17 +40,25 @@ public class PostController {
     // 글 작성
     @PostMapping
     @Transactional
-    @ResponseStatus(HttpStatus.CREATED)
-    public PostDto write(@RequestBody @Valid PostWriteReqBody reqBody) {
+    public RsData<PostDto> write(@RequestBody @Valid PostWriteReqBody reqBody) {
         Post post = postService.write(reqBody.title(), reqBody.content());
-        return new PostDto(post);
+
+        return new RsData<>(
+                "201-1",
+                "%d번 글이 작성되었습니다.".formatted(post.getId()),
+                new PostDto(post)
+        );
     }
 
     // 글 삭제
     @DeleteMapping("/{id}")
     @Transactional
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable int id) {
+    public RsData<Void> delete(@PathVariable int id) {
         postService.delete(id);
+
+        return new RsData<>(
+                "200-1",
+                "%d번 글이 삭제되었습니다.".formatted(id)
+        );
     }
 }

@@ -15,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.hamcrest.Matchers.endsWith;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
@@ -152,9 +153,12 @@ class PostCommentControllerTest {
                 )
                 .andDo(print())
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.id").isNumber())
-                .andExpect(jsonPath("$.postId").value(post.getId()))
-                .andExpect(jsonPath("$.content").value("새 댓글"));
+                .andExpect(jsonPath("$.resultCode").value("201-1"))
+                .andExpect(jsonPath("$.statusCode").doesNotExist())
+                .andExpect(jsonPath("$.msg").value(endsWith("번 댓글이 작성되었습니다.")))
+                .andExpect(jsonPath("$.data.id").isNumber())
+                .andExpect(jsonPath("$.data.postId").value(post.getId()))
+                .andExpect(jsonPath("$.data.content").value("새 댓글"));
 
         assertThat(post.getComments()).hasSize(1);
         assertThat(countCommentsInDb()).isEqualTo(1);
@@ -203,7 +207,13 @@ class PostCommentControllerTest {
 
         mvc.perform(delete(url(post.getId(), comment.getId())))
                 .andDo(print())
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.statusCode").doesNotExist())
+                .andExpect(jsonPath("$.msg").value(
+                        "%d번 글의 %d번 댓글이 삭제되었습니다.".formatted(post.getId(), comment.getId())
+                ))
+                .andExpect(jsonPath("$.data").isEmpty());
 
         assertThat(post.getComments()).isEmpty();
         assertThat(existsCommentInDb(comment.getId())).isFalse();
@@ -237,7 +247,7 @@ class PostCommentControllerTest {
 
         mvc.perform(delete("/api/v1/posts/%d".formatted(post.getId())))
                 .andDo(print())
-                .andExpect(status().isNoContent());
+                .andExpect(status().isOk());
 
         assertThat(existsCommentInDb(comment.getId())).isFalse();
     }

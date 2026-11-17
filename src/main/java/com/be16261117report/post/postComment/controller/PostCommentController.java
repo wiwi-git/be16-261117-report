@@ -1,12 +1,12 @@
 package com.be16261117report.post.postComment.controller;
 
+import com.be16261117report.global.rsData.RsData;
 import com.be16261117report.post.post.entity.Post;
 import com.be16261117report.post.post.service.PostService;
 import com.be16261117report.post.postComment.dto.PostCommentDto;
 import com.be16261117report.post.postComment.dto.PostCommentWriteReqBody;
 import com.be16261117report.post.postComment.entity.PostComment;
 import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
@@ -49,25 +49,32 @@ public class PostCommentController {
     // 댓글 작성
     @PostMapping
     @Transactional
-    @ResponseStatus(HttpStatus.CREATED)
-    public PostCommentDto write(
+    public RsData<PostCommentDto> write(
             @PathVariable int postId,
             @RequestBody @Valid PostCommentWriteReqBody reqBody
     ) {
         Post post = postService.findById(postId);
         PostComment postComment = postService.writeComment(post, reqBody.content());
 
-        return new PostCommentDto(postComment);
+        return new RsData<>(
+                "201-1",
+                "%d번 글에 %d번 댓글이 작성되었습니다.".formatted(postId, postComment.getId()),
+                new PostCommentDto(postComment)
+        );
     }
 
     // 댓글 삭제
     @DeleteMapping("/{id}")
     @Transactional
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void delete(@PathVariable int postId, @PathVariable int id) {
+    public RsData<Void> delete(@PathVariable int postId, @PathVariable int id) {
         Post post = postService.findById(postId);
         PostComment postComment = postService.findCommentById(post, id);
 
         postService.deleteComment(post, postComment);
+
+        return new RsData<>(
+                "200-1",
+                "%d번 글의 %d번 댓글이 삭제되었습니다.".formatted(postId, id)
+        );
     }
 }
