@@ -18,6 +18,10 @@ public class PostService {
         this.postRepository = postRepository;
     }
 
+    public long count() {
+        return postRepository.count();
+    }
+
     public List<Post> findAll() {
         return postRepository.findAllByOrderByIdDesc();
     }
