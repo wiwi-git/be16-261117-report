@@ -6,6 +6,7 @@ import com.be16261117report.post.postComment.entity.PostComment;
 import com.be16261117report.post.postComment.service.PostCommentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -21,6 +22,7 @@ public class PostCommentController {
 
     // 댓글 다건 조회
     @GetMapping
+    @Transactional(readOnly = true)
     public List<PostCommentDto> getItems(@PathVariable int postId) {
         return postCommentService.findAll(postId)
                 .stream()
@@ -30,12 +32,14 @@ public class PostCommentController {
 
     // 댓글 단건 조회
     @GetMapping("/{id}")
+    @Transactional(readOnly = true)
     public PostCommentDto getItem(@PathVariable int postId, @PathVariable int id) {
         return new PostCommentDto(postCommentService.findById(postId, id));
     }
 
     // 댓글 작성
     @PostMapping
+    @Transactional
     @ResponseStatus(HttpStatus.CREATED)
     public PostCommentDto write(
             @PathVariable int postId,
@@ -47,6 +51,7 @@ public class PostCommentController {
 
     // 댓글 삭제
     @DeleteMapping("/{id}")
+    @Transactional
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable int postId, @PathVariable int id) {
         postCommentService.delete(postId, id);
