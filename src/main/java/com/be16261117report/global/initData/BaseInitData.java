@@ -2,7 +2,6 @@ package com.be16261117report.global.initData;
 
 import com.be16261117report.post.post.entity.Post;
 import com.be16261117report.post.post.service.PostService;
-import com.be16261117report.post.postComment.service.PostCommentService;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,16 +19,13 @@ public class BaseInitData {
     // 생성 시점에는 아직 자기 자신이 만들어지지 않았으므로 @Lazy로 순환 참조를 피한다.
     private final BaseInitData self;
     private final PostService postService;
-    private final PostCommentService postCommentService;
 
     public BaseInitData(
             @Lazy BaseInitData self,
-            PostService postService,
-            PostCommentService postCommentService
+            PostService postService
     ) {
         this.self = self;
         this.postService = postService;
-        this.postCommentService = postCommentService;
     }
 
     @Bean
@@ -49,12 +45,13 @@ public class BaseInitData {
         Post post3 = postService.write("세 번째 글", "세 번째 글의 내용입니다.");
 
         // 댓글 5개를 글마다 2개, 2개, 1개로 나눠 단다.
-        postCommentService.write(post1.getId(), "첫 번째 글의 첫 번째 댓글입니다.");
-        postCommentService.write(post1.getId(), "첫 번째 글의 두 번째 댓글입니다.");
+        // work()의 트랜잭션 안에서 글이 영속 상태이므로, 컬렉션에 추가만 하면 커밋 때 저장된다.
+        post1.addComment("첫 번째 글의 첫 번째 댓글입니다.");
+        post1.addComment("첫 번째 글의 두 번째 댓글입니다.");
 
-        postCommentService.write(post2.getId(), "두 번째 글의 첫 번째 댓글입니다.");
-        postCommentService.write(post2.getId(), "두 번째 글의 두 번째 댓글입니다.");
+        post2.addComment("두 번째 글의 첫 번째 댓글입니다.");
+        post2.addComment("두 번째 글의 두 번째 댓글입니다.");
 
-        postCommentService.write(post3.getId(), "세 번째 글의 첫 번째 댓글입니다.");
+        post3.addComment("세 번째 글의 첫 번째 댓글입니다.");
     }
 }

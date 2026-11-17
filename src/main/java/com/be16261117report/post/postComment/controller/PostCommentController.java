@@ -1,9 +1,10 @@
 package com.be16261117report.post.postComment.controller;
 
+import com.be16261117report.post.post.entity.Post;
+import com.be16261117report.post.post.service.PostService;
 import com.be16261117report.post.postComment.dto.PostCommentDto;
 import com.be16261117report.post.postComment.dto.PostCommentWriteReqBody;
 import com.be16261117report.post.postComment.entity.PostComment;
-import com.be16261117report.post.postComment.service.PostCommentService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
@@ -11,20 +12,25 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+// 댓글은 글(Post)을 통해서만 다룬다.
+// 액션의 트랜잭션 안에서 글을 조회하므로 글은 영속 상태이고,
+// 댓글 컬렉션을 바꾸면 커밋 시점에 더티 체킹으로 DB에 반영된다.
 @RestController
 @RequestMapping("/api/v1/posts/{postId}/comments")
 public class PostCommentController {
-    private final PostCommentService postCommentService;
+    private final PostService postService;
 
-    public PostCommentController(PostCommentService postCommentService) {
-        this.postCommentService = postCommentService;
+    public PostCommentController(PostService postService) {
+        this.postService = postService;
     }
 
     // 댓글 다건 조회
     @GetMapping
     @Transactional(readOnly = true)
     public List<PostCommentDto> getItems(@PathVariable int postId) {
-        return postCommentService.findAll(postId)
+        Post post = postService.findById(postId);
+
+        return postService.findComments(post)
                 .stream()
                 .map(PostCommentDto::new)
                 .toList();
@@ -34,7 +40,10 @@ public class PostCommentController {
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     public PostCommentDto getItem(@PathVariable int postId, @PathVariable int id) {
-        return new PostCommentDto(postCommentService.findById(postId, id));
+        Post post = postService.findById(postId);
+        PostComment postComment = postService.findCommentById(post, id);
+
+        return new PostCommentDto(postComment);
     }
 
     // 댓글 작성
@@ -45,7 +54,9 @@ public class PostCommentController {
             @PathVariable int postId,
             @RequestBody @Valid PostCommentWriteReqBody reqBody
     ) {
-        PostComment postComment = postCommentService.write(postId, reqBody.content());
+        Post post = postService.findById(postId);
+        PostComment postComment = postService.writeComment(post, reqBody.content());
+
         return new PostCommentDto(postComment);
     }
 
@@ -54,6 +65,9 @@ public class PostCommentController {
     @Transactional
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void delete(@PathVariable int postId, @PathVariable int id) {
-        postCommentService.delete(postId, id);
+        Post post = postService.findById(postId);
+        PostComment postComment = postService.findCommentById(post, id);
+
+        postService.deleteComment(post, postComment);
     }
 }

@@ -3,8 +3,7 @@ package com.be16261117report.post.postComment.controller;
 import com.be16261117report.post.post.entity.Post;
 import com.be16261117report.post.post.service.PostService;
 import com.be16261117report.post.postComment.entity.PostComment;
-import com.be16261117report.post.postComment.repository.PostCommentRepository;
-import com.be16261117report.post.postComment.service.PostCommentService;
+import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,10 +34,7 @@ class PostCommentControllerTest {
     private PostService postService;
 
     @Autowired
-    private PostCommentService postCommentService;
-
-    @Autowired
-    private PostCommentRepository postCommentRepository;
+    private EntityManager em;
 
     private Post post;
 
@@ -55,11 +51,26 @@ class PostCommentControllerTest {
         return "/api/v1/posts/%d/comments/%d".formatted(postId, commentId);
     }
 
+    // 댓글 추가·삭제는 컬렉션 변경 → flush 시점에 DB 반영이므로,
+    // DB 상태를 확인하기 전에 flush 해서 쌓인 변경을 내보낸다.
+    private long countCommentsInDb() {
+        em.flush();
+        return em.createQuery("select count(c) from PostComment c", Long.class)
+                .getSingleResult();
+    }
+
+    // flush 후 영속성 컨텍스트를 비워 1차 캐시가 아닌 DB에서 다시 조회한다.
+    private boolean existsCommentInDb(int id) {
+        em.flush();
+        em.clear();
+        return em.find(PostComment.class, id) != null;
+    }
+
     @Test
     @DisplayName("댓글 다건 조회 - 최신 댓글이 먼저 나온다")
     void getItems() throws Exception {
-        PostComment comment1 = postCommentService.write(post.getId(), "댓글1");
-        PostComment comment2 = postCommentService.write(post.getId(), "댓글2");
+        PostComment comment1 = postService.writeComment(post, "댓글1");
+        PostComment comment2 = postService.writeComment(post, "댓글2");
 
         mvc.perform(get(url(post.getId())))
                 .andDo(print())
@@ -75,8 +86,8 @@ class PostCommentControllerTest {
     @DisplayName("댓글 다건 조회 - 다른 글의 댓글은 나오지 않는다")
     void getItemsOnlyThisPost() throws Exception {
         Post otherPost = postService.write("제목2", "내용2");
-        postCommentService.write(post.getId(), "댓글1");
-        postCommentService.write(otherPost.getId(), "다른 글 댓글");
+        postService.writeComment(post, "댓글1");
+        postService.writeComment(otherPost, "다른 글 댓글");
 
         mvc.perform(get(url(post.getId())))
                 .andDo(print())
@@ -96,7 +107,7 @@ class PostCommentControllerTest {
     @Test
     @DisplayName("댓글 단건 조회")
     void getItem() throws Exception {
-        PostComment comment = postCommentService.write(post.getId(), "댓글1");
+        PostComment comment = postService.writeComment(post, "댓글1");
 
         mvc.perform(get(url(post.getId(), comment.getId())))
                 .andDo(print())
@@ -120,7 +131,7 @@ class PostCommentControllerTest {
     @DisplayName("댓글 단건 조회 - 다른 글의 댓글 번호로 조회하면 404")
     void getItemOfOtherPost() throws Exception {
         Post otherPost = postService.write("제목2", "내용2");
-        PostComment otherComment = postCommentService.write(otherPost.getId(), "다른 글 댓글");
+        PostComment otherComment = postService.writeComment(otherPost, "다른 글 댓글");
 
         mvc.perform(get(url(post.getId(), otherComment.getId())))
                 .andDo(print())
@@ -128,7 +139,7 @@ class PostCommentControllerTest {
     }
 
     @Test
-    @DisplayName("댓글 작성")
+    @DisplayName("댓글 작성 - 글의 댓글 컬렉션에 추가되고 DB에 저장된다")
     void writeItem() throws Exception {
         mvc.perform(
                         post(url(post.getId()))
@@ -145,7 +156,8 @@ class PostCommentControllerTest {
                 .andExpect(jsonPath("$.postId").value(post.getId()))
                 .andExpect(jsonPath("$.content").value("새 댓글"));
 
-        assertThat(postCommentRepository.count()).isEqualTo(1);
+        assertThat(post.getComments()).hasSize(1);
+        assertThat(countCommentsInDb()).isEqualTo(1);
     }
 
     @Test
@@ -163,7 +175,7 @@ class PostCommentControllerTest {
                 .andDo(print())
                 .andExpect(status().isBadRequest());
 
-        assertThat(postCommentRepository.count()).isZero();
+        assertThat(countCommentsInDb()).isZero();
     }
 
     @Test
@@ -181,19 +193,20 @@ class PostCommentControllerTest {
                 .andDo(print())
                 .andExpect(status().isNotFound());
 
-        assertThat(postCommentRepository.count()).isZero();
+        assertThat(countCommentsInDb()).isZero();
     }
 
     @Test
-    @DisplayName("댓글 삭제")
+    @DisplayName("댓글 삭제 - 글의 댓글 컬렉션에서 빠지고 DB에서도 삭제된다(orphanRemoval)")
     void deleteItem() throws Exception {
-        PostComment comment = postCommentService.write(post.getId(), "댓글1");
+        PostComment comment = postService.writeComment(post, "댓글1");
 
         mvc.perform(delete(url(post.getId(), comment.getId())))
                 .andDo(print())
                 .andExpect(status().isNoContent());
 
-        assertThat(postCommentRepository.findById(comment.getId())).isEmpty();
+        assertThat(post.getComments()).isEmpty();
+        assertThat(existsCommentInDb(comment.getId())).isFalse();
     }
 
     @Test
@@ -208,24 +221,24 @@ class PostCommentControllerTest {
     @DisplayName("댓글 삭제 - 다른 글의 댓글 번호로 삭제하면 404, 댓글은 남아 있다")
     void deleteItemOfOtherPost() throws Exception {
         Post otherPost = postService.write("제목2", "내용2");
-        PostComment otherComment = postCommentService.write(otherPost.getId(), "다른 글 댓글");
+        PostComment otherComment = postService.writeComment(otherPost, "다른 글 댓글");
 
         mvc.perform(delete(url(post.getId(), otherComment.getId())))
                 .andDo(print())
                 .andExpect(status().isNotFound());
 
-        assertThat(postCommentRepository.findById(otherComment.getId())).isPresent();
+        assertThat(existsCommentInDb(otherComment.getId())).isTrue();
     }
 
     @Test
     @DisplayName("글을 삭제하면 그 글의 댓글도 함께 삭제된다")
     void deletePostCascadesComments() throws Exception {
-        PostComment comment = postCommentService.write(post.getId(), "댓글1");
+        PostComment comment = postService.writeComment(post, "댓글1");
 
         mvc.perform(delete("/api/v1/posts/%d".formatted(post.getId())))
                 .andDo(print())
                 .andExpect(status().isNoContent());
 
-        assertThat(postCommentRepository.findById(comment.getId())).isEmpty();
+        assertThat(existsCommentInDb(comment.getId())).isFalse();
     }
 }
